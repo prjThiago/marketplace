@@ -1,24 +1,53 @@
-const Ad = require('../models/Ad');
-const User = require('../models/User');
-const Mail = require('../services/Mail');
+const Ad = require('../models/Ad')
+const User = require('../models/User')
+const Purchase = require('../models/Purchase')
+const Queue = require('../services/Queue')
+const PurchaseMail = require('../jobs/PurchaseMail')
 
 class PurchaseController {
-  async store(req, res) {
-    const { ad, content } = req.body;
+  async store (req, res) {
+    const { ad, content } = req.body
 
-    const purchaseAd = await Ad.findById(ad).populate('author');
-    const user = await User.findById(req.userId);
+    const purchaseAd = await Ad.findById(ad).populate('author')
+    const user = await User.findById(req.userId)
 
-    await Mail.sendMail({
-      from: '"Thiago Morais" <thiagomoraisrj@gmail.com>',
-      to: purchaseAd.author.email,
-      subject: `Solicitação de compra: ${purchaseAd.title}`,
-      template: 'purchase',
-      context: { user, content, ad: purchaseAd },
-    });
+    const purchase = await Purchase.create({ content, ad, user: user._id })
 
-    return res.send();
+    Queue.create(PurchaseMail.key, {
+      ad: purchaseAd,
+      user,
+      content
+    }).save()
+
+    return res.json(purchase)
+  }
+
+  async confirm (req, res) {
+    const { id } = req.params
+
+    const { ad } = await Purchase.findOne(req.params.id).populate({
+      path: 'ad',
+      populate: {
+        path: 'author'
+      }
+    })
+
+    if (!ad.author._id.equals(req.userId)) {
+      return res.status(400).json({ error: 'You are not the author' })
+    }
+
+    if (ad.purchasedBy) {
+      return res
+        .status(400)
+        .json({ error: 'This ad had already been purchadsed' })
+    }
+
+    ad.purchasedBy = id
+
+    await ad.save()
+
+    return res.json(ad)
   }
 }
 
-module.exports = new PurchaseController();
+module.exports = new PurchaseController()

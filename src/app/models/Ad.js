@@ -6,6 +6,11 @@ const Ad = new mongoose.Schema({
   description: { type: String, required: true },
   author: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   price: { type: Number, required: true },
+  purchasedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Purchase',
+    default: null
+  },
   createdAt: { type: Date, default: Date.now }
 })
 
